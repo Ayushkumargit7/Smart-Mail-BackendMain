@@ -104,4 +104,4 @@ app.post('/generate', async (req, res) => {
 Connection();
 
 // app.listen(PORT, () => console.log(`Server started on PORT ${PORT}`));
-app.listen(port, "0.0.0.0",() => console.log(`Server started on PORT ${PORT}`));
+app.listen(port, "0.0.0.0",() => console.log(`Server started on PORT ${port}`));
