@@ -107,13 +107,10 @@ export const getEmails = async (request, response) => {
 
     if (request.params.type === "starred") {
       emails = await Email.find({ starred: true, bin: false });
-      console.log(emails);
     } else if (request.params.type === "bin") {
       emails = await Email.find({ bin: true });
-      console.log(emails);
     } else if (request.params.type === "allmail") {
       emails = await Email.find({}); // Get all emails
-      console.log(emails);
     } else if (request.params.type === "inbox") {
       try {
         // emails = await fetchEmails();
@@ -134,37 +131,6 @@ export const getEmails = async (request, response) => {
     response.status(500).json(error.message);
   }
 };
-
-
-// export const getEmails = async (request, response) => { //cached logic , but have to implement on new changes update cache also.
-//   try {
-//     // const cacheKey = request.params.type;
-//     // let emails = emailCache.get(cacheKey);
-//     let emails;
-//     if (!emails) {
-//       if (request.params.type === "starred") {
-//         emails = await Email.find({ starred: true, bin: false });
-//       } else if (request.params.type === "bin") {
-//         emails = await Email.find({ bin: true });
-//       } else if (request.params.type === "allmail") {
-//         emails = await Email.find({});
-//       } else if (request.params.type === "inbox") {
-//         const existingUnreadEmails = await Email.find({ type: "inbox", bin: false });
-//         const newEmails = await fetchEmails();
-//         emails = [...existingUnreadEmails, ...newEmails];
-//       } else {
-//         emails = await Email.find({ type: request.params.type });
-//       }
-
-//       // emailCache.set(cacheKey, emails); // Cache the result
-//     }
-
-//     response.status(200).json(emails);
-//   } catch (error) {
-//     response.status(500).json(error.message);
-//   }
-// };
-
 
 export const saveSendEmails = async (request, response) => {
   try {
