@@ -1,10 +1,7 @@
 import Email from "../model/email.js";
 import Imap from "imap";
-import { inspect } from "util";
 import { simpleParser } from "mailparser";
-
-// import NodeCache from 'node-cache';
-// const emailCache = new NodeCache({ stdTTL: 600 }); // Cache items for 10 minutes
+import { redisClient } from "../middlewares/redis.js";
 
 import dotenv from "dotenv";
 
@@ -46,39 +43,38 @@ const fetchEmails = () => {
                   reject(err);
                   return;
                 }
-               
 
-                const { from, subject, text, date ,messageId} = parsed;
+                const { from, subject, text, date, messageId } = parsed;
                 const emailData = {
-                    // _id:messageId,
-                    to: process.env.USER,
-                    from: from.text,
-                    subject,
-                    body: text,
-                    date: date || new Date(), // Use the parsed date or current date if not available
-                    name: 'Smart Mail',
-                    starred: false,
-                    bin: false,
-                    type: 'inbox'
-                  };
-                  
-                  // emails.push(emailData);
+                  // _id:messageId,
+                  to: process.env.USER,
+                  from: from.text,
+                  subject,
+                  body: text,
+                  date: date || new Date(), // Use the parsed date or current date if not available
+                  name: "Smart Mail",
+                  starred: false,
+                  bin: false,
+                  type: "inbox",
+                };
+
+                // emails.push(emailData);
 
                 //   // Save email to database
                 //   const email = new Email(emailData);
                 //   await email.save();
-                
+
                 const existingEmail = await Email.findOne({
-                    from: emailData.from,
-                    subject: emailData.subject,
-                    date: emailData.date
-                  });
-                  if (!existingEmail) {
-                    // Save email to database if it doesn't already exist
-                    const email = new Email(emailData);
-                    await email.save();
-                    emails.push(emailData);
-                  }
+                  from: emailData.from,
+                  subject: emailData.subject,
+                  date: emailData.date,
+                });
+                if (!existingEmail) {
+                  // Save email to database if it doesn't already exist
+                  const email = new Email(emailData);
+                  await email.save();
+                  emails.push(emailData);
+                }
 
                 console.log(emails);
               });
@@ -107,22 +103,25 @@ export const getEmails = async (request, response) => {
 
     if (request.params.type === "starred") {
       emails = await Email.find({ starred: true, bin: false });
-    } else if (request.params.type === "bin") {
+    } 
+    else if (request.params.type === "bin") {
       emails = await Email.find({ bin: true });
-    } else if (request.params.type === "allmail") {
-      emails = await Email.find({}); // Get all emails
-    } else if (request.params.type === "inbox") {
-      try {
-        // emails = await fetchEmails();
-
-        const existingUnreadEmails = await Email.find({ type: "inbox", bin: false });
-        const newEmails = await fetchEmails();
-        // lastFetchTime = new Date(); // Update the last fetch time
-        emails = [...existingUnreadEmails, ...newEmails];
-      } catch (error) {
-        return response.status(500).json(error.message);
-      }
-    } else {
+    } 
+    else if (request.params.type === "allmail") {
+      emails = await Email.find({});
+    } 
+    else if (request.params.type === "inbox") {
+      const existingUnreadEmails = await Email.find({
+        type: "inbox",
+        bin: false,
+      });
+      const newEmails = await fetchEmails();
+      emails = [...existingUnreadEmails, ...newEmails];
+    } 
+    else if (request.params.type === "sent") {
+      emails = await Email.find({ type: "sent" }); // Fetch sent emails
+    } 
+    else {
       emails = await Email.find({ type: request.params.type });
     }
 
@@ -134,7 +133,7 @@ export const getEmails = async (request, response) => {
 
 export const saveSendEmails = async (request, response) => {
   try {
-    const { name, date, from, to, body, subject,type } = request.body;
+    const { name, date, from, to, body, subject, type } = request.body;
 
     if (!name || !date || !from || !to || !type || !subject) {
       return response.status(400).json({ message: "Missing required fields" });
@@ -143,6 +142,16 @@ export const saveSendEmails = async (request, response) => {
     const email = new Email({ name, date, from, to, body, subject, type });
     await email.save();
 
+    // Invalidate cache
+    if (redisClient) {
+      if(type === "sent"){
+        await redisClient.del("/emails/sent");
+        await redisClient.del("/emails/allmail");
+      }
+      else{
+        await redisClient.del("/emails/drafts");
+      }
+    }
 
     response.status(200).json("Email saved successfully");
   } catch (error) {
@@ -157,6 +166,11 @@ export const toggleStarredEmail = async (request, response) => {
       { _id: request.body.id },
       { $set: { starred: request.body.value } }
     );
+
+    if (redisClient) {
+      await redisClient.del("/emails/starred");
+    }
+
     response.status(201).json("Value is updated");
   } catch (error) {
     response.status(500).json(error.message);
@@ -166,6 +180,16 @@ export const toggleStarredEmail = async (request, response) => {
 export const deleteEmails = async (request, response) => {
   try {
     await Email.deleteMany({ _id: { $in: request.body } });
+
+    if (redisClient) {
+      await redisClient.del("/emails/inbox");
+      await redisClient.del("/emails/starred");
+      await redisClient.del("/emails/sent");
+      await redisClient.del("/emails/drafts");
+      await redisClient.del("/emails/bin");
+      await redisClient.del("/emails/allmail");
+    }
+
     response.status(200).json("Emails deleted successfully");
   } catch (error) {
     response.status(500).json(error.message);
@@ -178,6 +202,10 @@ export const moveEmailsToBin = async (request, response) => {
       { _id: { $in: request.body } },
       { $set: { bin: true, starred: false, type: "" } }
     );
+    if (redisClient) {
+      await redisClient.del("/emails/bin");
+    }
+
     response.status(200).json("Emails moved to bin");
   } catch (error) {
     response.status(500).json(error.message);
