@@ -22,9 +22,7 @@
     "mongoose": "^8.3.0",
     "node-cache": "^5.1.2",
     "nodemailer": "^6.9.13",
-    "redis": "^4.6.15"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.20"
+    "redis": "^4.6.15",
+    "nodemon": "^3.0.3"
   }
 }
